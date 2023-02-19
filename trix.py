@@ -14,7 +14,7 @@ import discord
 
 # - - print execution starting time - -
 
-now = datetime.now()
+now = datetime.now(timezone("Europe/Paris"))
 current_time = now.strftime("%d/%m/%Y %H:%M:%S")
 print("--- Start Execution Time :", current_time, "---")
 
@@ -196,7 +196,7 @@ async def on_ready():
 client.run(TOKEN)
 
 
-now = datetime.now()
+now = datetime.now(timezone("Europe/Paris"))
 current_time = now.strftime("%d/%m/%Y %H:%M:%S")
 print(message)
 print("--- End Execution Time :", current_time, "---")
