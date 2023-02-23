@@ -1,4 +1,4 @@
-ccxt
-pandas
-ta
+ccxt==2.6.53
+pandas==1.3.5
+ta==0.9.0
 discord
