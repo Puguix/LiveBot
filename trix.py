@@ -98,7 +98,7 @@ message = f" - - - - - - - - - {now.strftime('%d/%m %H h')}- - - - - - - - - \nC
 
 positions_data = bitget.get_open_position()
 position = [
-    {"side": d["side"], "size": d["contractSize"], "market_price":d["info"]["marketPrice"], "usd_size": float(d["contractSize"]) * float(d["info"]["marketPrice"]), "open_price": d["entryPrice"]}
+    {"side": d["side"], "size": float(d["contracts"]) * float(d["contractSize"]), "market_price":d["info"]["marketPrice"], "usd_size": float(d["contracts"]) * float(d["contractSize"]) * float(d["info"]["marketPrice"]), "open_price": d["entryPrice"]}
     for d in positions_data if d["symbol"] == pair]
 
 row = df.iloc[-2]
@@ -175,6 +175,7 @@ if len(position) == 0 or checkConditions:
     else:
         message += "\nNo interesting position found"
 
+print(message)
 
 # Discord part to get updates on what the bot is doing
 
@@ -198,5 +199,4 @@ client.run(TOKEN)
 
 now = datetime.now(timezone("Europe/Paris"))
 current_time = now.strftime("%d/%m/%Y %H:%M:%S")
-print(message)
 print("--- End Execution Time :", current_time, "---")
