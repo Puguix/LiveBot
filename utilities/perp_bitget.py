@@ -142,7 +142,7 @@ class PerpBitget():
                 self.convert_amount_to_precision(symbol, amount), 
                 self.convert_price_to_precision(symbol, trigger_price),
                 params = {
-                    'stopPrice': self.convert_price_to_precision(symbol, trigger_price),  # your stop price
+                    'stopLossPrice': self.convert_price_to_precision(symbol, trigger_price),  # your stop price
                     "triggerType": "market_price",
                     "reduceOnly": reduce
                 }

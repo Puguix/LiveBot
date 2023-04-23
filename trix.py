@@ -22,25 +22,29 @@ print("--- Start Execution Time :", current_time, "---")
 # - - get secret data - -
 
 f = open(
-    "/home/puguix/Desktop/LiveBot/secret.json",
+    "./LiveBot/secret.json",
 )
 secret = json.load(f)
 f.close()
 
+print(1)
+
 account_to_select = "bot crypto"
 production = True
 checkConditions = False
-
+tradeClosed = False
 
 # - - Define time frames and trading pair - -
 
 pair = "ETH/USDT:USDT"
 timeframe = "1h"
-leverage = 1
+leverage = 2
 
 
 # - - Define parameters for the strategy - -
 
+risque = 0.05
+risqueWithLeverage = risque / leverage
 type = ["long", "short"]
 trixLength = 8
 trixSignal = 21
@@ -63,6 +67,7 @@ def open_short(row):
 def close_short(row):
     return row['TRIX_HISTO'] > 0 and row['STOCH_RSI'] < top
 
+print(1.5)
 
 # - - Get bitget API - -
 
@@ -71,6 +76,8 @@ bitget = PerpBitget(
     secret=secret[account_to_select]["secret"],
     password=secret[account_to_select]["password"],
 )
+
+print(2)
 
 # Get data
 df = bitget.get_more_last_historical_async(pair, timeframe, 1000)
@@ -87,6 +94,7 @@ df['TRIX_HISTO'] = df['TRIX_PCT'] - df['TRIX_SIGNAL']
 # - - Stochastic RSI - -
 df['STOCH_RSI'] = ta.momentum.stochrsi(close=df['close'], window=RSIWindow, smooth1=3, smooth2=3)
 
+print(3)
 
 # - - Get balance - -
 
@@ -98,10 +106,11 @@ message = f" - - - - - - - - - {now.strftime('%d/%m %H h')}- - - - - - - - - \nC
 
 positions_data = bitget.get_open_position()
 position = [
-    {"side": d["side"], "size": float(d["contracts"]) * float(d["contractSize"]), "market_price":d["info"]["marketPrice"], "usd_size": float(d["contracts"]) * float(d["contractSize"]) * float(d["info"]["marketPrice"]), "open_price": d["entryPrice"]}
-    for d in positions_data if d["symbol"] == pair]
+ {"side": d["side"], "size": float(d["contracts"]) * float(d["contractSize"]), "market_price":d["info"]["marketPrice"], "usd_size": float(d["contracts"]) * float(d["contractSize"]) * float(d["info"]["marketPrice"]), "open_price": d["entryPrice"]} for d in positions_data if d["symbol"] == pair]
 
 row = df.iloc[-2]
+
+print(4)
 
 histo = row['TRIX_HISTO']
 rsi = row['STOCH_RSI']
@@ -112,8 +121,9 @@ message += f"\nTrix histo: {histo} et RSI: {rsi}"
 
 if len(position) > 0:
     position = position[0]
-    message += f"\nCurrent position : {position}"
-    
+    message += f"\nCurrent position : {position['side']}, Diff since opening: {round((float(position['market_price']) - float(position['open_price']))/float(position['open_price'])*leverage*100, 2)}%, Open Price: {float(position['open_price'])}"
+    print(4.5)
+
     # - - Long - - 
     if position["side"] == "long" and close_long(row):
         close_long_market_price = float(df.iloc[-1]["close"])
@@ -122,6 +132,8 @@ if len(position) > 0:
         )
         exchange_close_long_quantity = close_long_quantity * close_long_market_price
         message += f"\nPlace Close Long Market Order: {close_long_quantity} {pair[:-5]} at the price of {close_long_market_price}$ ~{round(exchange_close_long_quantity, 2)}$"
+        tradeClosed = True
+        tradeResult = f"{position['side']}: {round((float(close_long_market_price) - float(position['open_price']))/float(position['open_price'])*leverage*100,2)}%"
         if production:
             bitget.place_market_order(pair, "sell", close_long_quantity, reduce=True)
         checkConditions = True
@@ -134,6 +146,8 @@ if len(position) > 0:
         )
         exchange_close_short_quantity = close_short_quantity * close_short_market_price
         message += f"\nPlace Close Short Market Order: {close_short_quantity} {pair[:-5]} at the price of {close_short_market_price}$ ~{round(exchange_close_short_quantity, 2)}$"
+        tradeClosed = True
+        tradeResult = f"{position['side']}: {-round((float(close_short_market_price) - float(position['open_price']))/float(position['open_price'])*leverage*100,2)}%"
         if production:
             bitget.place_market_order(pair, "buy", close_short_quantity, reduce=True)
         checkConditions = True
@@ -141,46 +155,57 @@ if len(position) > 0:
     else:
         message += "\nHolding the position"
 
+print(5)
 
 # - - Check if we have to open a position - -
 
 if len(position) == 0 or checkConditions:
     message += "\nLooking to open a position ..."
-    
+    print(5.1)
+
     # - - Look for a long - -
     if open_long(row) and "long" in type:
+        print(5.2)
         long_market_price = float(df.iloc[-1]["close"])
         long_quantity_in_usd = usd_balance * leverage
         long_quantity = float(bitget.convert_amount_to_precision(pair, float(
-            bitget.convert_amount_to_precision(pair, long_quantity_in_usd / long_market_price)
+            bitget.convert_amount_to_precision(pair, long_quantity_in_usd / long_market_price - 0.01)
         )))
         exchange_long_quantity = long_quantity * long_market_price
+        print(exchange_long_quantity, usd_balance)
         message += f"\nPlace Open Long Market Order: {long_quantity} {pair[:-5]} at the price of {long_market_price}$ ~{round(exchange_long_quantity, 2)}$"
         if production:
-            bitget.place_market_order(pair, "buy", long_quantity, reduce=False)
+            bitget.place_market_order(pair, "buy", long_quantity)
+            bitget.place_market_stop_loss(pair, "buy", long_quantity, long_market_price * (1 - risqueWithLeverage))
+        print(5.3)
 
     # - - Look for a short - -
     elif open_short(row) and "short" in type:
+        print(5.5)
         short_market_price = float(df.iloc[-1]["close"])
         short_quantity_in_usd = usd_balance * leverage
         short_quantity = float(bitget.convert_amount_to_precision(pair, float(
-            bitget.convert_amount_to_precision(pair, short_quantity_in_usd / short_market_price)
+            bitget.convert_amount_to_precision(pair, short_quantity_in_usd / short_market_price - 0.01)
         )))
         exchange_short_quantity = short_quantity * short_market_price
         message += f"\nPlace Open Short Market Order: {short_quantity} {pair[:-5]} at the price of {short_market_price}$ ~{round(exchange_short_quantity, 2)}$"
         if production:
-            bitget.place_market_order(pair, "sell", short_quantity, reduce=False)
-    
+            bitget.place_market_order(pair, "sell", short_quantity)
+            bitget.place_market_stop_loss(pair, "sell", short_quantity, short_market_price * (1 + risqueWithLeverage))
+        print(5.6)
+
     # - - No position to be opened - -
     else:
         message += "\nNo interesting position found"
+        print(5.9)
 
 print(message)
 
 # Discord part to get updates on what the bot is doing
 
 TOKEN = secret["discordToken"]
-USER = secret["myDiscordId"]
+ID = secret["myDiscordId"]
+TRADEID = secret["tradeHistoryId"]
 
 client = discord.Client(intents=discord.Intents.all())
 
@@ -189,8 +214,12 @@ client = discord.Client(intents=discord.Intents.all())
 async def on_ready():
     print(f'{client.user} has successfully connected to Discord!')
     
-    puguix = await client.fetch_user(USER)
-    await puguix.send(message)
+    botChannel = client.get_channel(ID)
+    await botChannel.send(message)
+
+    if (tradeClosed):
+        tradeChannel = client.get_channel(TRADEID)
+        await tradeChannel.send(tradeResult)
 
     await client.close()
 
